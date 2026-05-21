@@ -33,28 +33,127 @@ async function run() {
 
     const db = client.db('ideavault')
     const ideasCollection = db.collection('ideas')
+    const commentsCollection = db.collection('comments')
+
+    // GET comments for an idea
+    app.get('/comments/:ideaId', async (req, res) => {
+      try {
+        const comments = await commentsCollection
+          .find({ ideaId: req.params.ideaId })
+          .sort({ createdAt: -1 })
+          .toArray()
+        res.send(comments)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch comments' })
+      }
+    })
+
+    // POST a comment
+    app.post('/comments', async (req, res) => {
+      try {
+        const comment = {
+          ...req.body,
+          createdAt: new Date()
+        }
+        const result = await commentsCollection.insertOne(comment)
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to add comment' })
+      }
+    })
+
+    // PATCH (edit) a comment — only owner can edit
+    app.patch('/comments/:id', async (req, res) => {
+      try {
+        const { text } = req.body
+        const result = await commentsCollection.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { text, updatedAt: new Date() } }
+        )
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to update comment' })
+      }
+    })
+
+    // DELETE a comment
+    app.delete('/comments/:id', async (req, res) => {
+      try {
+        const result = await commentsCollection.deleteOne({
+          _id: new ObjectId(req.params.id)
+        })
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to delete comment' })
+      }
+    })
+
+    // GET comments by user email (for My Interactions page)
+    app.get('/my-comments', async (req, res) => {
+      try {
+        const { email } = req.query
+        const comments = await commentsCollection
+          .find({ userEmail: email })
+          .toArray()
+        res.send(comments)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch user comments' })
+      }
+    })
 
     // CREATE - Post a new idea
     app.post('/ideas', async (req, res) => {
       try {
-        const idea = req.body
+        const idea = {
+          ...req.body,
+          createdAt: new Date()
+        }
         if (!idea.title || !idea.description) {
           return res.status(400).send({ message: 'Title and description are required' })
         }
         const result = await ideasCollection.insertOne(idea)
         res.send(result)
       } catch (error) {
-        res.status(500).send({ message: 'Failed to create idea', error: error.message })
+        res.status(500).send({ message: 'Failed to create idea' })
       }
     })
 
+    // Add this new route — GET my ideas by email
+    app.get('/my-ideas', async (req, res) => {
+      try {
+        const { email } = req.query
+        const ideas = await ideasCollection
+          .find({ userEmail: email })
+          .sort({ createdAt: -1 })
+          .toArray()
+        res.send(ideas)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch your ideas' })
+      }
+    })
     // READ - Get all ideas
     app.get('/ideas', async (req, res) => {
       try {
-        const ideas = await ideasCollection.find({}).toArray()
+        const { search, category, limit } = req.query
+        let query = {}
+
+        if (search) {
+          query.title = { $regex: search, $options: 'i' }
+        }
+        if (category) {
+          query.category = category
+        }
+
+        let cursor = ideasCollection.find(query).sort({ createdAt: -1 })
+
+        if (limit) {
+          cursor = cursor.limit(parseInt(limit))
+        }
+
+        const ideas = await cursor.toArray()
         res.send(ideas)
       } catch (error) {
-        res.status(500).send({ message: 'Failed to fetch ideas', error: error.message })
+        res.status(500).send({ message: 'Failed to fetch ideas' })
       }
     })
 
