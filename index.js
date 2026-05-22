@@ -1,5 +1,6 @@
 require('dotenv').config()
 const express = require('express')
+const jwt = require('jsonwebtoken')
 const cors = require('cors')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 
@@ -10,6 +11,7 @@ const port = process.env.PORT || 4000
 app.use(cors({
   origin: [
     'http://localhost:5173',
+    'http://localhost:3001',
     'http://localhost:5174',
     'http://localhost:3000'
   ]
@@ -27,8 +29,41 @@ const client = new MongoClient(uri, {
 })
 
 async function run() {
+  // Generate JWT token on login
+  app.post('/jwt', (req, res) => {
+    try {
+      const user = req.body // { email, name }
+      if (!user?.email) {
+        return res.status(400).send({ message: 'Email is required' })
+      }
+      const token = jwt.sign(
+        { email: user.email, name: user.name },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      )
+      res.send({ token })
+    } catch (error) {
+      res.status(500).send({ message: 'Failed to generate token' })
+    }
+  })
+
+  // Middleware to verify JWT — add this BEFORE protected routes
+  const verifyToken = (req, res, next) => {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).send({ message: 'Unauthorized — no token' })
+    }
+    const token = authHeader.split(' ')[1]
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET)
+      req.user = decoded // attach user info to request
+      next()
+    } catch (error) {
+      return res.status(403).send({ message: 'Forbidden — invalid token' })
+    }
+  }
   try {
-    await client.connect()
+    // await client.connect()
     console.log('Pinged your deployment. You successfully connected to MongoDB!')
 
     const db = client.db('ideavault')
@@ -49,7 +84,7 @@ async function run() {
     })
 
     // POST a comment
-    app.post('/comments', async (req, res) => {
+    app.post('/comments', verifyToken, async (req, res) => {
       try {
         const comment = {
           ...req.body,
@@ -63,7 +98,7 @@ async function run() {
     })
 
     // PATCH (edit) a comment — only owner can edit
-    app.patch('/comments/:id', async (req, res) => {
+    app.patch('/comments/:id', verifyToken, async (req, res) => {
       try {
         const { text } = req.body
         const result = await commentsCollection.updateOne(
@@ -77,7 +112,7 @@ async function run() {
     })
 
     // DELETE a comment
-    app.delete('/comments/:id', async (req, res) => {
+    app.delete('/comments/:id', verifyToken, async (req, res) => {
       try {
         const result = await commentsCollection.deleteOne({
           _id: new ObjectId(req.params.id)
@@ -102,13 +137,13 @@ async function run() {
     })
 
     // CREATE - Post a new idea
-    app.post('/ideas', async (req, res) => {
+    app.post('/ideas', verifyToken, async (req, res) => {
       try {
         const idea = {
           ...req.body,
           createdAt: new Date()
         }
-        if (!idea.title || !idea.description) {
+        if (!idea.title || (!idea.description && !idea.shortDescription && !idea.detailedDescription)) {
           return res.status(400).send({ message: 'Title and description are required' })
         }
         const result = await ideasCollection.insertOne(idea)
@@ -119,7 +154,7 @@ async function run() {
     })
 
     // Add this new route — GET my ideas by email
-    app.get('/my-ideas', async (req, res) => {
+    app.get('/my-ideas', verifyToken, async (req, res) => {
       try {
         const { email } = req.query
         const ideas = await ideasCollection
@@ -175,7 +210,7 @@ async function run() {
     })
 
     // UPDATE - Update an idea by ID
-    app.put('/ideas/:id', async (req, res) => {
+    app.put('/ideas/:id', verifyToken, async (req, res) => {
       try {
         const id = req.params.id
         if (!ObjectId.isValid(id)) {
@@ -196,7 +231,7 @@ async function run() {
     })
 
     // DELETE - Delete an idea by ID
-    app.delete('/ideas/:id', async (req, res) => {
+    app.delete('/ideas/:id', verifyToken, async (req, res) => {
       try {
         const id = req.params.id
         if (!ObjectId.isValid(id)) {
