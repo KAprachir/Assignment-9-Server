@@ -262,6 +262,7 @@ async function run() {
 
 run().catch(console.dir);
 
-app.listen(port, () => {
-  console.log(`IdeaVault server listening on port ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`IdeaVault server listening on port ${port}`);
+// });
+module.exports = app;
