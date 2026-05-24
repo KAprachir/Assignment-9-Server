@@ -1,12 +1,11 @@
 {
   "name": "ideavault-server",
   "version": "1.0.0",
-  "description": "��#\u0000 \u0000A\u0000s\u0000s\u0000i\u0000g\u0000n\u0000m\u0000e\u0000n\u0000t\u0000-\u00009\u0000-\u0000S\u0000e\u0000r\u0000v\u0000e\u0000r\u0000\r\u0000 \u0000",
+  "description": "IdeaVault Backend - Express server with MongoDB",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon index.js"
   },
   "keywords": [],
   "author": "",
@@ -17,7 +16,9 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongodb": "^7.2.0",
+    "mongodb": "^7.2.0"
+  },
+  "devDependencies": {
     "nodemon": "^3.1.14"
   },
   "repository": {

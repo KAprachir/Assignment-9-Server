@@ -7,10 +7,22 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 4000;
 
-app.use(cors());
+// ✅ CORS with restricted origins
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:5173",
+      "http://localhost:5174",
+      // ✅ Add your Vercel URL here after deploying client
+      process.env.CLIENT_URL || "http://localhost:3000",
+    ],
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
-// MongoDB connection
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, {
   serverApi: {
@@ -20,51 +32,51 @@ const client = new MongoClient(uri, {
   },
 });
 
-async function run() {
-  // Generate JWT token on login
-  app.post("/jwt", (req, res) => {
-    try {
-      const user = req.body; // { email, name }
-      if (!user?.email) {
-        return res.status(400).send({ message: "Email is required" });
-      }
-      const token = jwt.sign(
-        { email: user.email, name: user.name },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" },
-      );
-      res.send({ token });
-    } catch (error) {
-      res.status(500).send({ message: "Failed to generate token" });
-    }
-  });
-
-  // Middleware to verify JWT — add this BEFORE protected routes
-  const verifyToken = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).send({ message: "Unauthorized — no token" });
-    }
-    const token = authHeader.split(" ")[1];
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded; // attach user info to request
-      next();
-    } catch (error) {
-      return res.status(403).send({ message: "Forbidden — invalid token" });
-    }
-  };
+// ✅ Middleware to verify JWT
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).send({ message: "Unauthorized — no token" });
+  }
+  const token = authHeader.split(" ")[1];
   try {
-    // await client.connect()
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!",
-    );
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).send({ message: "Forbidden — invalid token" });
+  }
+};
+
+async function run() {
+  try {
+    // ✅ CONNECT TO MONGODB
+    await client.connect();
+    console.log("Successfully connected to MongoDB!");
 
     const db = client.db("ideavault");
     const ideasCollection = db.collection("ideas");
     const commentsCollection = db.collection("comments");
 
-    // GET comments for an idea
+    // ============ JWT ROUTE ============
+    app.post("/jwt", (req, res) => {
+      try {
+        const user = req.body;
+        if (!user?.email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+        const token = jwt.sign(
+          { email: user.email, name: user.name },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" },
+        );
+        res.send({ token });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to generate token" });
+      }
+    });
+
+    // ============ COMMENTS ROUTES ============
     app.get("/comments/:ideaId", async (req, res) => {
       try {
         const comments = await commentsCollection
@@ -77,7 +89,6 @@ async function run() {
       }
     });
 
-    // POST a comment
     app.post("/comments", verifyToken, async (req, res) => {
       try {
         const comment = {
@@ -91,7 +102,6 @@ async function run() {
       }
     });
 
-    // PATCH (edit) a comment — only owner can edit
     app.patch("/comments/:id", verifyToken, async (req, res) => {
       try {
         const { text } = req.body;
@@ -105,7 +115,6 @@ async function run() {
       }
     });
 
-    // DELETE a comment
     app.delete("/comments/:id", verifyToken, async (req, res) => {
       try {
         const result = await commentsCollection.deleteOne({
@@ -117,7 +126,6 @@ async function run() {
       }
     });
 
-    // GET comments by user email (for My Interactions page)
     app.get("/my-comments", async (req, res) => {
       try {
         const { email } = req.query;
@@ -130,7 +138,7 @@ async function run() {
       }
     });
 
-    // CREATE - Post a new idea
+    // ============ IDEAS ROUTES ============
     app.post("/ideas", verifyToken, async (req, res) => {
       try {
         const idea = {
@@ -154,7 +162,6 @@ async function run() {
       }
     });
 
-    // Add this new route — GET my ideas by email
     app.get("/my-ideas", verifyToken, async (req, res) => {
       try {
         const { email } = req.query;
@@ -167,7 +174,7 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch your ideas" });
       }
     });
-    // READ - Get all ideas
+
     app.get("/ideas", async (req, res) => {
       try {
         const { search, category, limit } = req.query;
@@ -193,7 +200,6 @@ async function run() {
       }
     });
 
-    // READ - Get a single idea by ID
     app.get("/ideas/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -212,7 +218,6 @@ async function run() {
       }
     });
 
-    // UPDATE - Update an idea by ID
     app.put("/ideas/:id", verifyToken, async (req, res) => {
       try {
         const id = req.params.id;
@@ -235,7 +240,6 @@ async function run() {
       }
     });
 
-    // DELETE - Delete an idea by ID
     app.delete("/ideas/:id", verifyToken, async (req, res) => {
       try {
         const id = req.params.id;
@@ -255,14 +259,34 @@ async function run() {
           .send({ message: "Failed to delete idea", error: error.message });
       }
     });
-  } finally {
-    // await client.close()
+
+    // ✅ Health check endpoint
+    app.get("/health", (req, res) => {
+      res.send({ message: "Server is running" });
+    });
+
+    console.log("All routes initialized successfully");
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
   }
 }
 
-run().catch(console.dir);
+run();
 
-// app.listen(port, () => {
-//   console.log(`IdeaVault server listening on port ${port}`);
-// });
+// ✅ SERVER LISTENS HERE
+const server = app.listen(port, () => {
+  console.log(`IdeaVault server listening on port ${port}`);
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("Shutting down...");
+  await client.close();
+  server.close(() => {
+    console.log("Server closed");
+    process.exit(0);
+  });
+});
+
 module.exports = app;
