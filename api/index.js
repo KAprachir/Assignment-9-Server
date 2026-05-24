@@ -274,19 +274,4 @@ async function run() {
 
 run();
 
-// ✅ SERVER LISTENS HERE
-const server = app.listen(port, () => {
-  console.log(`IdeaVault server listening on port ${port}`);
-});
-
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("Shutting down...");
-  await client.close();
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
-});
-
 module.exports = app;
