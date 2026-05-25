@@ -58,6 +58,15 @@ async function run() {
     const ideasCollection = db.collection("ideas");
     const commentsCollection = db.collection("comments");
 
+    app.get("/", (req, res) => {
+      res.send({ message: "IdeaVault API is running" });
+    });
+
+    // ✅ ADD THIS HEALTH ROUTE
+    app.get("/health", (req, res) => {
+      res.send({ message: "Server is running" });
+    });
+
     // ============ JWT ROUTE ============
     app.post("/jwt", (req, res) => {
       try {
@@ -269,6 +278,7 @@ async function run() {
 
 run();
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`Server is running on port ${port}`);
+// });
+module.exports = app;
