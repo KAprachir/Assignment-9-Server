@@ -260,11 +260,6 @@ async function run() {
       }
     });
 
-    // ✅ Health check endpoint
-    app.get("/health", (req, res) => {
-      res.send({ message: "Server is running" });
-    });
-
     console.log("All routes initialized successfully");
   } catch (error) {
     console.error("Failed to start server:", error);
@@ -274,4 +269,6 @@ async function run() {
 
 run();
 
-module.exports = app;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
