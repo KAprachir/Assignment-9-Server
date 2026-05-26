@@ -15,6 +15,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:5174",
       process.env.CLIENT_URL || "http://localhost:3000",
+      "https://assignment-9-client-prachir.vercel.app",
     ],
     credentials: true,
   }),
